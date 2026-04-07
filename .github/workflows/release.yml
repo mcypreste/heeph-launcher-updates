@@ -1,0 +1,61 @@
+name: Release Client Update
+
+on:
+  push:
+    tags:
+      - '*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate payload
+        run: |
+          set -e
+          if [ ! -f "payload/heeph-1.8.9.jar" ]; then
+            echo "Missing payload/heeph-1.8.9.jar" >&2
+            exit 1
+          fi
+          if [ ! -f "payload/heeph-1.8.9.json" ]; then
+            echo "Missing payload/heeph-1.8.9.json" >&2
+            exit 1
+          fi
+
+      - name: Build zip + manifest
+        run: |
+          set -e
+          VERSION="${GITHUB_REF_NAME}"
+
+          ZIP_NAME="heeph-1.8.9.zip"
+          rm -f "$ZIP_NAME" manifest.json
+
+          (cd payload && zip -9 -j "../$ZIP_NAME" "heeph-1.8.9.jar" "heeph-1.8.9.json")
+
+          JAR_SHA=$(sha256sum payload/heeph-1.8.9.jar | awk '{print toupper($1)}')
+          JSON_SHA=$(sha256sum payload/heeph-1.8.9.json | awk '{print toupper($1)}')
+
+          cat > manifest.json <<EOF
+          {
+            "version": "${VERSION}",
+            "zipUrl": "${ZIP_NAME}",
+            "jarSha256": "${JAR_SHA}",
+            "jsonSha256": "${JSON_SHA}"
+          }
+          EOF
+
+          echo "Built $ZIP_NAME and manifest.json"
+          cat manifest.json
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            heeph-1.8.9.zip
+            manifest.json
+          generate_release_notes: true
